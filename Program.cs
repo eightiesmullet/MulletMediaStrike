@@ -4,13 +4,13 @@ using System.Net;
 using System.Runtime.InteropServices;                 //Feel free to do whatever with my code, my project
 using System.Security.Principal;                      //just kept growing and i wasn't anticipating it.
 using System.Text.RegularExpressions;                 //All I ask is that you leave my signatures
-using Microsoft.Win32;                                
+using Microsoft.Win32;
 using NAudio.CoreAudioApi;                         
 using NAudio.Wave;
 using Newtonsoft.Json.Linq;
 
 
-namespace CS_Integration_Combined
+namespace Mullet_Media_Strike_6._9
 {
     class Program
     {
@@ -21,7 +21,7 @@ namespace CS_Integration_Combined
         static string counterFilePath = "keystrokes_counter.txt";
         static string portFilePath = "webhook_port.txt";
         static int webhookPort = 1337;
-        static string selectedProcessName = "spotify.exe";
+        static string selectedProcessName = "";
         static string statusText = "unmuted";
         static bool exitRequested = false;
         static string playerStatus = "waiting...";
@@ -129,6 +129,7 @@ namespace CS_Integration_Combined
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Console.Title = "=== Mullet Media-Strike 6.9 ===";
             //AppDomain.CurrentDomain.ProcessExit += (sender, e) => SaveSettings();
+            AppDomain.CurrentDomain.ProcessExit += new EventHandler(OnProcessExit);
             LoadCounter();
             LoadPort();
             IsRunAsAdmin();
@@ -150,6 +151,12 @@ namespace CS_Integration_Combined
                         break;
                 }
             }
+        }
+        static void OnProcessExit(object sender, EventArgs e)
+        {
+            //Console.WriteLine("I'm out of here");
+            AudioControl.SetVolumeTo50(selectedProcessName);
+
         }
 
         static void DisplayMenuGray(string mainMenu)
@@ -1407,7 +1414,6 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 }
             });
         }
-
         static void HandleIncomingGameState(string json)
         {
             shouldMute = false;
@@ -1430,7 +1436,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 if (matchStats == null)
 
                     // Status tracking
-                    phaseStatus = phase;
+                phaseStatus = phase;
                 activityStatus = activity;
                 providerSteamidStatus = providerSteamid;
                 playerSteamidStatus = playerSteamid;
@@ -1475,6 +1481,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 //&& mapPhase == "live" 
                 //&& playerAliveThisRound == true
                 )
+
                 {
                     shouldMute = true;
                 }
@@ -1482,6 +1489,8 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 {
                     shouldMute = false;
                 }
+
+                //SoundPlayer.killStreakSound(json);
 
                 if (mainScreen && activity == "menu" || activity == "waiting...")
                 {
@@ -1541,13 +1550,13 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                     lastTargetVolume = targetVolume;
                 }
 
+
             }
 
 
             catch { }
 
         }
-
         public static bool IsCFGFileOpenInEditor()
         {
             string targetFileName = "gamestate_integration_media.cfg";
@@ -1584,10 +1593,20 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
             // decide “should be playing” based on targetVolume:
             bool shouldBePlaying = targetVolume > 0;
 
+
             // paused to playing
             if (shouldBePlaying && !isPlaying && mediaKeysEnabled == true)
             {
-                MediaControl.Play();
+                if (selectedProcessName == "spotify.exe" || 
+                    selectedProcessName == "VLC.exe" || 
+                    selectedProcessName == "chrome.exe")
+                {
+                    MediaControl.SendPlayTargettedPauseKey(selectedProcessName);
+                }
+                else
+                {
+                    MediaControl.Play();
+                }
                 isPlaying = true;
             }
 
@@ -1598,7 +1617,17 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
             // transition
             if (!shouldBePlaying && isPlaying && mediaKeysEnabled == true)
             {
-                MediaControl.Pause();
+                if (selectedProcessName == "spotify.exe" || 
+                    selectedProcessName == "VLC.exe" || 
+                    selectedProcessName == "chrome.exe")
+                    
+                {
+                    MediaControl.SendPlayTargettedPauseKey(selectedProcessName);
+                }
+                else
+                {
+                    MediaControl.Pause();
+                }
                 isPlaying = false;
             }
         }
@@ -1745,7 +1774,6 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 Console.SetCursorPosition(0, 13);
                 Console.WriteLine($"Volume: min {defaultMinVolume} | max {defaultMaxVolume} | fade: {defaultFade}".PadRight(w));
 
-
                 string howmanybars = plotVolume(currentVolume2);
                 Console.SetCursorPosition(0, 23);
                 Console.WriteLine($"[{howmanybars}]");
@@ -1774,6 +1802,10 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 Console.SetCursorPosition(0, 21);
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.WriteLine("=================================================".PadRight(w));
+
+                /*Console.SetCursorPosition(0, 24);
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"{roundKills}");*/
 
 
                 if (csIsRunning)
@@ -2188,32 +2220,6 @@ It looks like you don't have a gamestate_integration_media.cfg present in your C
                 {
                     //Console.WriteLine($"[Error] Could not start listener: {ex.Message}");
                 }
-            }
-        }
-
-
-        public class MediaControl
-        {
-            const byte VK_MEDIA_PLAY_PAUSE = 0xB3;
-            const uint KEYEVENTF_KEYUP = 0x0002;
-
-            [DllImport("user32.dll", SetLastError = true)]
-            static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-
-            public static void Play()
-            {
-                SendPlayPauseKey();
-            }
-
-            public static void Pause()
-            {
-                SendPlayPauseKey();
-            }
-
-            private static void SendPlayPauseKey()
-            {
-                keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, UIntPtr.Zero);
-                keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
             }
         }
 
@@ -2930,194 +2936,9 @@ It's really easy!
                 return principal.IsInRole(WindowsBuiltInRole.Administrator);
             }
         }
-        public class AudioControl
-        {
-            // method to mute or adjust the volume for application
-            public static void AdjustAppVolume(string selectedProcessName, bool mute, float volumePercentage)
-            {
-                var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(selectedProcessName));
-                if (processes.Length == 0) return;
-
-                MMDeviceEnumerator deviceEnumerator = new MMDeviceEnumerator();
-                MMDevice device = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                var sessions = device.AudioSessionManager.Sessions;
-
-                for (int i = 0; i < sessions.Count; i++)
-                {
-                    var session = sessions[i];
-                    string sessionId = session.GetSessionIdentifier.ToString().ToLower();
-
-                    if (sessionId.Contains(selectedProcessName.ToLower()))
-                    {
-                        // Mute or adjust volume based on the mute parameter and volume percentage
-                        session.SimpleAudioVolume.Mute = mute;
-                        session.SimpleAudioVolume.Volume = volumePercentage / 100.0f; // Convert percentage to float (0-1)
-                        break;
-                    }
-                }
-            }
-
-            // Method to set volume to 50% for app
-            public static void SetVolumeTo50(string selectedProcessName)
-            {
-                AdjustAppVolume(selectedProcessName, false, 50);
-            }
-
-            // Method to set volume to 100% for app
-            public static void SetVolumeTo100(string selectedProcessName)
-            {
-                AdjustAppVolume(selectedProcessName, false, 100);
-            }
-            public static float GetAppVolume(string selectedProcessName)
-            {
-                var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(selectedProcessName));
-                if (processes.Length == 0) return -1;
-
-                MMDeviceEnumerator deviceEnumerator = new MMDeviceEnumerator();
-                MMDevice device = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                var sessions = device.AudioSessionManager.Sessions;
-
-                for (int i = 0; i < sessions.Count; i++)
-                {
-                    var session = sessions[i];
-                    string sessionId = session.GetSessionIdentifier.ToString().ToLower();
-
-                    if (sessionId.Contains(selectedProcessName.ToLower()))
-                    {
-                        float volume = session.SimpleAudioVolume.Volume * 100.0f;
-                        return (float)Math.Round(volume); // return whole number %
-                    }
-                }
-
-                return -1;
-            }
-            public static void FadeToVolume(string selectedProcessName, float targetVolume, int durationMs = 1000, int steps = 20)
-            {
-                var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(selectedProcessName));
-                if (processes.Length == 0) return;
-
-                MMDeviceEnumerator deviceEnumerator = new MMDeviceEnumerator();
-                MMDevice device = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                var sessions = device.AudioSessionManager.Sessions;
-
-                for (int i = 0; i < sessions.Count; i++)
-                {
-                    var session = sessions[i];
-                    string sessionId = session.GetSessionIdentifier.ToString().ToLower();
-
-                    if (sessionId.Contains(selectedProcessName.ToLower()))
-                    {
-                        var simpleVolume = session.SimpleAudioVolume;
-                        float currentVolume = simpleVolume.Volume;
-                        float target = targetVolume / 100.0f;
-                        float stepSize = (target - currentVolume) / steps;
-                        int delay = durationMs / steps;
-
-                        for (int s = 0; s < steps; s++)
-                        {
-                            currentVolume += stepSize;
-                            simpleVolume.Volume = Math.Clamp(currentVolume, 0f, 1f);
-                            Thread.Sleep(delay);
-                        }
-
-                        // set exact volume at the end to avoid rounding error
-                        simpleVolume.Volume = target;
-                        return;
-                    }
-                }
-            }
-
-        }
     }
 }
-public class SoundPlayer
-{
-    private IWavePlayer outputDevice;
-    private AudioFileReader audioFile;
 
-    public void PlaySound(string filePath, float volume = 1.0f)
-    {
-        Stop(); // stop sound that is playing
-
-        outputDevice = new WaveOutEvent();
-        audioFile = new AudioFileReader(filePath)
-        {
-            Volume = volume // set volume 0.0 = mute 1.0 = full
-        };
-        outputDevice.Init(audioFile);
-        outputDevice.Play();
-    }
-
-    public void Stop()
-    {
-        outputDevice?.Stop();
-        outputDevice?.Dispose();
-        outputDevice = null;
-
-        audioFile?.Dispose();
-        audioFile = null;
-    }
-
-    // Shared sound player instances (to prevent sound stacking)
-    private static readonly SoundPlayer launchSelectPlayer = new SoundPlayer();
-    private static readonly SoundPlayer escapePlayer = new SoundPlayer();
-    private static readonly SoundPlayer splashScreenPlayer = new SoundPlayer();
-    private static readonly SoundPlayer buttonFailPlayer = new SoundPlayer();
-    private static readonly SoundPlayer splashScreenDoor = new SoundPlayer();
-    private static readonly SoundPlayer nextSound = new SoundPlayer();
-    private static readonly SoundPlayer successSoundEffect = new SoundPlayer();
-    private static DateTime lastFailSoundTime = DateTime.MinValue;
-    public static void LaunchSelect()
-    {
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "launch_select2.wav");
-        launchSelectPlayer.Stop();
-        launchSelectPlayer.PlaySound(soundPath, 0.5f);
-    }
-
-    public static void EscapeButton()
-    {
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "launch_glow1.wav");
-        escapePlayer.Stop();
-        escapePlayer.PlaySound(soundPath, 0.5f);
-    }
-
-    public static void SplashScreen()
-    {
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "Splash Screen 4.wav");
-        splashScreenPlayer.Stop();
-        splashScreenPlayer.PlaySound(soundPath, 0.3f);
-    }
-
-    public static void ButtonFail()
-    {
-        if ((DateTime.Now - lastFailSoundTime).TotalMilliseconds < 600)
-            return; // Too soon to play again
-
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "button2 fail.wav");
-        buttonFailPlayer.Stop();
-        buttonFailPlayer.PlaySound(soundPath, 0.3f);
-
-        lastFailSoundTime = DateTime.Now;
-    }
-    public static void SplashScreenDoor()
-    {
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "doormove2.wav");
-        buttonFailPlayer.Stop();
-        buttonFailPlayer.PlaySound(soundPath, 0.2f);
-    }
-    public static void NextSound()
-    {
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "launch_dnmenu1.wav");
-        buttonFailPlayer.Stop();
-        buttonFailPlayer.PlaySound(soundPath, 0.3f);
-    }
-    public static void SuccessSoundEffect()
-    {
-        string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "bell.wav");
-        buttonFailPlayer.Stop();
-        buttonFailPlayer.PlaySound(soundPath, 0.2f);
-    }
-}
 
 
 
