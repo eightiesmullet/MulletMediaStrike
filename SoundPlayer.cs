@@ -120,34 +120,5 @@ namespace Mullet_Media_Strike_6._9
             buttonFailPlayer.PlaySound(soundPath, 0.5f);
         }
 
-        static int roundKills = 0;
-        static bool isPlayingNew = true;
-        public static void killStreakSound(string json)
-        {
-            var jsonObj = JObject.Parse(json);
-            roundKills = jsonObj["player"]?["state"]?["round_kills"]?.Value<int>() ?? 0;
-            if (roundKills == 2 && isPlayingNew == true)
-            {
-                SoundPlayer.DoubleKill();
-                isPlayingNew = false;
-            }
-            else if (roundKills == 3 && isPlayingNew == false)
-            {
-                SoundPlayer.MultiKill();
-                isPlayingNew = true;
-            }
-            else if (roundKills == 4 && isPlayingNew == true)
-            {
-                SoundPlayer.UltraKill();
-                isPlayingNew = false;
-            }
-            else if (roundKills == 5 && isPlayingNew == false)
-            {
-                isPlayingNew = true;
-                SoundPlayer.MonsterKill();
-                roundKills = 0;
-            }
-        }
-
     }
 }

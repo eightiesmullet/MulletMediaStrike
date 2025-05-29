@@ -108,6 +108,18 @@ namespace Mullet_Media_Strike_6._9
         static float currentVolume2;
         static string volumeVisualized = "";
         static string howmanybars = "";
+        static int startUpVolume;
+        static bool exiting = false;
+        static string killStreakTextForUpdateLoop = "";
+        static bool playedDoubleKill = false;
+        static bool playedMultiKill = false;
+        static bool playedUltraKill = false;
+        static bool playedMonsterKill = false;
+        static string killStreakText = "";
+        static bool runOnce = false;
+        static int newDeaths = 0;
+        static string soundAlerts = "disabled(DM)";
+
         enum ProgramState
         {
             Menu,
@@ -119,7 +131,6 @@ namespace Mullet_Media_Strike_6._9
 
         static void Main(string[] args)
         {
-
             if (listener == null || !listener.IsListening)
             {
                 StartWebhook();
@@ -154,9 +165,17 @@ namespace Mullet_Media_Strike_6._9
         }
         static void OnProcessExit(object sender, EventArgs e)
         {
-            //Console.WriteLine("I'm out of here");
-            AudioControl.SetVolumeTo50(selectedProcessName);
 
+            exiting = true;
+            targetVolume = startUpVolume;
+            AudioControl.FadeToVolume(selectedProcessName, targetVolume, defaultFade, 10);
+            Thread.Sleep(defaultFade);
+        }
+
+        static void SaveStartUpVolume()
+        {
+            float startUpVolumeFloat = AudioControl.GetAppVolume($"{selectedProcessName}");
+            startUpVolume = (int)Math.Round(startUpVolumeFloat);
         }
 
         static void DisplayMenuGray(string mainMenu)
@@ -189,12 +208,12 @@ namespace Mullet_Media_Strike_6._9
                 PrintHeader();
                 GetPortFromConfig();
 
-                string mainMenu =
+                /*string mainMenu =
 @$"Select audio app to mute when alive:
 [1] Spotify
-[2] Winamp
+[2] Chrome
 [3] VLC
-[4] Custom (e.g chrome.exe, foobar2000.exe)
+[4] Custom (e.g winamp.exe, foobar2000.exe)
 
 Automatic configuration:
 [5] Automatic Port Configuration
@@ -204,8 +223,22 @@ Additional options:
 [7] Media Keys: {mediaKeys}
 [8] Webhook Port Change (current: {webhookPort})
 [9] Readme & Instructions
-[0] Restore Defaults";
+[0] Restore Defaults";*/
 
+                string mainMenu =
+@$"Select audio app to mute when alive:
+[1] Spotify
+[2] Chrome
+[3] VLC
+[4] Custom (e.g winamp.exe, foobar2000.exe)
+
+Port configuration:
+[5] Automatic Port Configuration
+[6] Webhook Port Change (current: {webhookPort})
+
+Settings & Features:
+[7] Sound Settings
+[8] Help & Restore Defaults";
                 if (validKey == true)
                 {
                     TypeWithBlockTrail(mainMenu, 1);
@@ -256,8 +289,8 @@ Additional options:
                     Console.ForegroundColor = ConsoleColor.DarkGreen;
                     Console.WriteLine(
 $@"[5] Automatic Port Configuration (recommended)
-[8] Webhook Port Change (recommended)
-[9] Readme & Instructions (for manual change)");
+[6] Webhook Port Change (recommended)
+[8] Help -> Readme & Instructions (for manual change)");
                     Console.ResetColor();
                 }
                 else if (foundPortParsed != webhookPort && foundPort == null && firstRun == false)
@@ -272,8 +305,8 @@ $@"[5] Automatic Port Configuration (recommended)
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine(
 $@"[5] Automatic Port Configuration (recommended)
-[8] Webhook Port Change (recommended)
-[9] Readme & Instructions (for manual steup)");
+[6] Webhook Port Change (recommended)
+[8] Help -> Readme & Instructions (for manual change))");
                     Console.ResetColor();
                 }
                 else if (foundPortParsed != webhookPort && foundPort == null && firstRun == true)
@@ -297,7 +330,12 @@ $@"[5] Automatic Port Configuration (recommended)
                         firstRun = false;
                         }
                 }
-
+                //Console.ForegroundColor = ConsoleColor.DarkGray;
+                //Console.WriteLine($"\nCurrent Settings:");
+                //Console.WriteLine($"Volume: min {defaultMinVolume}, max {defaultMaxVolume}, fade {defaultFade} | Media Keys: {mediaKeys} | Announcer: Enabled");
+                //Console.WriteLine($"Media Keys: {mediaKeys}");
+                //Console.WriteLine($"Announcer: Enabled");
+                Console.ResetColor();
                 bool validInput = false;
                 while (!validInput)
                 {
@@ -320,6 +358,7 @@ $@"[5] Automatic Port Configuration (recommended)
                             }
                             SoundPlayer.LaunchSelect();
                             selectedProcessName = "spotify.exe";
+                            SaveStartUpVolume();
                             validKey = true;
                             currentState = ProgramState.Running;
                             SaveSettings();
@@ -328,7 +367,7 @@ $@"[5] Automatic Port Configuration (recommended)
                             mainScreen = true;
                             validInput = true;
                             SoundPlayer.LaunchSelect();
-                            selectedProcessName = "winamp.exe";
+                            selectedProcessName = "chrome.exe";
                             validKey = true;
                             currentState = ProgramState.Running;
                             SaveSettings();
@@ -394,524 +433,7 @@ Make sure it maches the desired .exe that you want to mute.
                             }
 
                             currentState = ProgramState.Running;
-                            return;
-
-                        case ConsoleKey.D8:
-                            Console.CursorVisible = true;
-                            validInput = true;
-                            gray = true;
-                            SoundPlayer.LaunchSelect();
-                            DisplayMenuGray(mainMenu);
-                            Console.ForegroundColor = ConsoleColor.White;
-                            Console.Write("\nEnter desired port number (1024–65535): ");
-                            Console.ResetColor();
-                            if (int.TryParse(Console.ReadLine(), out int newPort) && newPort >= 1024 && newPort <= 65535)
-                            {
-                                webhookPort = newPort;
-                                SavePort();
-
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine($"[✓] Success! New port set to http://localhost:{newPort}.");
-                                SoundPlayer.SuccessSoundEffect();
-                                Console.WriteLine("Press any key to save and continue.");
-                                Console.ReadKey();
-                                RestartWebhook(newPort);
-                                DisplayMenuGray(mainMenu);
-                                SoundPlayer.NextSound();
-                                Console.ResetColor();
-
-                                bool wasGenerated;
-                                if (CfgFoundOrNot("gamestate_integration_media.cfg", out wasGenerated))
-                                {
-                                    DisplayMenuGray(mainMenu);
-                                    if (Process.GetProcessesByName("cs2").Any() || Process.GetProcessesByName("csgo").Any())
-                                    {
-                                        cfgRecentlyUpdated = true;
-                                    }
-                                    string truncatedPath = configFilePathPull.Length > 50 ? configFilePathPull.Substring(0, 50) + "..." : configFilePathPull;
-                                    string msg =
-                        @$"
-========================================================================================
-**Webhook Port Change**
-
-You {(wasGenerated ? "just created" : "seem to have")} a gamestate_integration_media.cfg located in:
-{truncatedPath}
-
-- Would you like to save the new port to it as well so that they match? (recommended)
-========================================================================================";
-                                    TypeWithBlockTrail(msg, 1);
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine("[1] Yes [2] No");
-                                    Console.CursorVisible = false;
-                                    Console.ResetColor();
-
-
-                                    bool validInput2 = false;
-                                    while (!validInput2)
-                                    {
-                                        ConsoleKey key2 = Console.ReadKey(true).Key; 
-                                        switch (key2)
-                                        {
-                                            case ConsoleKey.D1:
-                                            case ConsoleKey.NumPad1:
-                                                DisplayMenuGray(mainMenu);
-                                                SoundPlayer.NextSound();
-                                                validInput2 = true;
-                                                string newPortString = newPort.ToString();
-                                                bool success = UpdateGamestateIntegrationURI(newPortString);
-
-                                                if (success)
-                                                {
-                                                    Console.ForegroundColor = ConsoleColor.Green;
-                                                    Console.WriteLine("gamestate_integration.cfg port updated successfully!");
-                                                    if (Process.GetProcessesByName("cs2").Any() || Process.GetProcessesByName("csgo").Any())
-                                                    {
-                                                        cfgRecentlyUpdated = true;
-                                                    }
-                                                    SoundPlayer.SuccessSoundEffect();
-                                                }
-                                                else
-                                                {
-                                                    Console.ForegroundColor = ConsoleColor.Red;
-                                                    Console.WriteLine("Failed to update the port.");
-                                                    DisplayMenuGray(mainMenu);
-                                                    ShowUriWarningBlock();
-                                                    SoundPlayer.ButtonFail();
-                                                }
-                                                Console.ResetColor();
-
-                                                break;
-
-                                            case ConsoleKey.D2:
-                                            case ConsoleKey.NumPad2:
-                                                SoundPlayer.NextSound();
-                                                DisplayMenuGray(mainMenu);
-                                                validInput2 = true;
-                                                ShowUriWarningBlock();
-                                                Console.ForegroundColor = ConsoleColor.Yellow;
-                                                Console.WriteLine("Skipped updating URI.");
-                                                break;
-
-                                            default:
-                                                SoundPlayer.ButtonFail(); 
-                                                break;
-                                        }
-                                    }
-
-                                }
-                                else
-                                {
-                                    DisplayMenuGray(mainMenu);
-                                    ShowUriWarningBlock();
-                                }
-
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine("Press any key to continue...");
-                                Console.CursorVisible = false;
-                                Console.ResetColor();
-                                validKey = false;
-                                Console.ReadKey();
-                                SoundPlayer.NextSound();
-                            }
-                            else
-                            {
-                                SoundPlayer.ButtonFail();
-                                Console.WriteLine("Invalid port. Press any key to try again...");
-                                Console.WriteLine("Press any key to continue...");
-                                Console.CursorVisible = false;
-                                validKey = false;
-                                Console.ReadKey();
-                                SoundPlayer.NextSound();
-                            }
-                            Console.ResetColor();
-                            SaveSettings();
-                            gray = false;
-                            break;
-                        case ConsoleKey.D6:
-                            validInput = true;
-                            SoundPlayer.LaunchSelect();
-                            {
-                                Console.CursorVisible = false;
-                                gray = true;
-                                validKey = false;
-                                DisplayMenuGray(mainMenu);
-                                string message2 =
-    @$"
-========================================================================================
-**Volume Options**
-
-Set your MINIMUM volume for freezetimes, timeouts and intermissions.
-Current minimum volume: {defaultMinVolume}%
-
-- I'd suggest setting it to 25% or 50% so you can hear calls at the start of rounds.
-========================================================================================";
-                                TypeWithBlockTrail(message2, 10);
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.Write("Please set your NEW minimum volume (0-100): ");
-                                Console.CursorVisible = true;
-                                Console.ForegroundColor = ConsoleColor.White;
-                                string input = Console.ReadLine();
-                                Console.ResetColor();
-                                if (string.IsNullOrEmpty(input))
-                                {
-                                    SoundPlayer.ButtonFail();
-                                    Console.ForegroundColor = ConsoleColor.Red;
-                                    Console.WriteLine("[✘] Input cannot be empty. - loading defaults");
-                                    Console.ResetColor();
-                                    defaultMinVolume = 25;
-                                    defaultMaxVolume = 75;
-                                    defaultFade = 1000;
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"Press any key to go back to main menu...");
-                                    Console.CursorVisible = false;
-                                    Console.ResetColor();
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                    break;
-                                }
-                                else
-                                {
-                                    // Check if input contains '%'
-                                    if (input.Contains("%"))
-                                    {
-                                        // Remove the '%' character and try to parse the remaining number
-                                        input = input.Replace("%", "").Trim();
-                                    }
-                                }
-
-                                if (int.TryParse(input, out defaultMinVolume) && defaultMinVolume >= 0 && defaultMinVolume <= 100) //volume
-                                {
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"[✓] New minimum volume: {defaultMinVolume}%.");
-                                    Console.WriteLine("Press any key to save and continue.");
-                                    Console.CursorVisible = false;
-                                    SoundPlayer.SuccessSoundEffect();
-                                    Console.ResetColor();
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                }
-                                else
-                                {
-                                    SoundPlayer.ButtonFail();
-                                    Console.ForegroundColor = ConsoleColor.Yellow;
-                                    Console.WriteLine("[✘] Invalid input, choose a value between 0 and 100 - loading defaults.");
-                                    defaultMinVolume = 25;
-                                    defaultMaxVolume = 75;
-                                    defaultFade = 1000;
-                                    Console.ResetColor();
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"Press any key to go back to main menu...");
-                                    Console.CursorVisible = false;
-                                    Console.ResetColor();
-                                    validKey = false;
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                    break;
-                                }
-
-                                gray = true;
-                                validKey = false;
-                                DisplayMenuGray(mainMenu);
-                                string message5 =
-    @$"
-========================================================================================
-**Volume Options**
-
-Set your MAXIMUM volume for when you're DEAD in game.
-Current maximum volume: {defaultMaxVolume}%
-
-- I'd suggest setting it to 75% or 100%.
-========================================================================================";
-                                TypeWithBlockTrail(message5, 10);
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.Write("Please set your NEW maximum volume (0-100): ");
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.ResetColor();
-                                string input2 = Console.ReadLine();
-                                if (string.IsNullOrEmpty(input2))
-                                {
-                                    SoundPlayer.ButtonFail();
-                                    Console.ForegroundColor = ConsoleColor.Red;
-                                    Console.WriteLine("[✘] Input cannot be empty - loading defaults.");
-                                    Console.ResetColor();
-                                    defaultFade = 1000;
-                                    defaultMaxVolume = 75;
-                                    defaultMinVolume = 25;
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"Press any key to go back to main menu...");
-                                    Console.ResetColor();
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                    break;
-                                }
-                                else
-                                {
-                                    // Check if input contains '%'
-                                    if (input2.Contains("%"))
-                                    {
-                                        // Remove the '%' character and try to parse the remaining number
-                                        input2 = input2.Replace("%", "").Trim();
-                                    }
-                                }
-
-                                if (int.TryParse(input2, out defaultMaxVolume) && defaultMaxVolume >= 0 && defaultMaxVolume <= 100) //volume
-                                {
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"[✓] New maximum volume: {defaultMaxVolume}%.");
-                                    SoundPlayer.SuccessSoundEffect();
-                                    Console.WriteLine("Press any key to save and continue.");
-                                    Console.ResetColor();
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                }
-                                else
-                                {
-                                    SoundPlayer.ButtonFail();
-                                    Console.ForegroundColor = ConsoleColor.Yellow;
-                                    Console.WriteLine("[✘] Invalid input, choose a value between 0 and 100 - loading defaults.");
-                                    defaultMaxVolume = 75;
-                                    defaultMinVolume = 25;
-                                    defaultFade = 1000;
-                                    Console.ResetColor();
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"Press any key to go back to main menu...");
-                                    Console.ResetColor();
-                                    validKey = false;
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                    break;
-                                }
-
-                                gray = true;
-                                validKey = false;
-                                DisplayMenuGray(mainMenu);
-                                string message6 =
-    @$"
-========================================================================================
-**Volume Options**
-
-Set your fade level between mutes and unmutes for smooth sound transitions.
-Current fade: {defaultFade}ms
-
-- I'd suggest setting it between 500ms (0,5 seconds) and 1500ms (1,5 seconds)
-========================================================================================";
-                                TypeWithBlockTrail(message6, 10);
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.Write("Please set your NEW fade volume (100-5000): ");
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.ResetColor();
-                                string input3 = Console.ReadLine();
-                                if (string.IsNullOrEmpty(input3))
-                                {
-                                    SoundPlayer.ButtonFail();
-                                    Console.ForegroundColor = ConsoleColor.Red;
-                                    Console.WriteLine("[✘] Input cannot be empty - loading defaults.");
-                                    Console.ResetColor();
-                                    defaultMaxVolume = 75;
-                                    defaultMinVolume = 25;
-                                    defaultFade = 1000;
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"Press any key to go back to main menu...");
-                                    Console.ResetColor();
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                    break;
-                                }
-
-                                if (int.TryParse(input3, out defaultFade) && defaultFade >= 100 && defaultFade <= 5000) //volume
-                                {
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"[✓] New fade volume: {defaultFade}.");
-                                    SoundPlayer.SuccessSoundEffect();
-                                    Console.WriteLine("Press any key to save and continue go back to main menu.");
-                                    Console.ResetColor();
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                }
-                                else
-                                {
-                                    SoundPlayer.ButtonFail();
-                                    Console.ForegroundColor = ConsoleColor.Yellow;
-                                    Console.WriteLine("[✘] Invalid input, choose a value between 100 and 5000 - loading defaults.");
-                                    defaultMaxVolume = 75;
-                                    defaultMinVolume = 25;
-                                    defaultFade = 1000;
-                                    Console.ResetColor();
-                                    Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"Press any key to go back to main menu...");
-                                    Console.ResetColor();
-                                    validKey = false;
-                                    Console.ReadKey();
-                                    SoundPlayer.NextSound();
-                                    gray = false;
-                                    break;
-                                }
-                                Console.ResetColor();
-                                gray = false;
-                            }
-                            SaveSettings();
-                            break;
-                        case ConsoleKey.D9:
-                            validInput = true;
-                            SoundPlayer.LaunchSelect();
-                            {
-                                Console.Clear();
-                                string guideText =
-    @"  ========================================================================================
-                 Mullet Media-Strike 6.9 - Game State Integration
-  ========================================================================================
-
-  Follow these quick steps to get everything working smoothly. (Manual Setup)
-
-  ----------------------------------------------------------------------------------------
-  1. PLACE THE CONFIG FILE
-  ----------------------------------------------------------------------------------------
-     - Turn off Counter-Strike if its running.
-
-     - Copy the provided **game_stateintegration_media.cfg** file
-       (Its in the same folder as this readme)
-
-     - Paste it into the following folder:
-       [...]\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\csgo\cfg\
-
-  ----------------------------------------------------------------------------------------
-  2. YOU ARE DONE!
-  ----------------------------------------------------------------------------------------
-     - Start Counter-Strike again.
-
-     - Start or restart Mullet Media-Strike 6.9.
-  ----------------------------------------------------------------------------------------";
-
-
-                                string guideText2 =
-      @"  ----------------------------------------------------------------------------------------
-  3. (OPTIONAL) REPLACE ANY EXISTING CONFIG - FOOLPROOFING!
-  ----------------------------------------------------------------------------------------
-      - If a file named **gamestate_integration.cfg** already exists in that folder:
-       > Delete it.
-       > Replace it with **game_stateintegration_media.cfg**.
-
-  ----------------------------------------------------------------------------------------
-  4. (OPTIONAL) CONFIGURE LOCALHOST - skip if you want to use defaults.
-  ----------------------------------------------------------------------------------------
-     - Skip this if you just want to use the default port: **1337**
-
-     - If you want to use a different port:
-       > Open **game_stateintegration.cfg**
-       > Make sure the ""uri"" line uses the correct port your software listens to.
-         Example:
-         
-       ""uri"" ""http://localhost:1337/""
-
-       > Set whatever you port you chose in Mullet Media-Strike 6.9 to the same number.
-         You can change it in menu option [8] ""Change Webhook Port""
-
-  ----------------------------------------------------------------------------------------
-  IMPORTANT NOTES
-  ----------------------------------------------------------------------------------------
-   - You may need to run the software as administrator on some systems.
-
-   - This setup is **VAC-safe**. It uses the official GSI webhook that Valve
-     provides for tournament overlays.
-
-   - That said, I take **zero responsibility** if you get banned (even though that 
-     would make absolutely no sense).
-
-   - If something isn’t working, double-check:
-       > File paths
-       > Port numbers, they NEED to match for it to work.
-         Example: 
-         The gamestate_integration_media.cfg file has ""uri"" set to ""http://localhost:1337/""
-         this means that Mullet Media-Strike 6.9 needs to listen for port 1337 too.
-
-    - Every time you make changes to the .cfg file Counter-Strike requires a restart.
-
-    - I am currently considering looking into Spotify's API.
-
-    - If someone wants to help out with this project, let me know!
-
-  ========================================================================================
-                 Click some heads and enjoy your jams. //80smullet
-  ========================================================================================
-  ";
-                                TypeWithBlockTrail(guideText, 10);
-                                Console.ForegroundColor = ConsoleColor.Gray;
-                                Console.WriteLine("\n[!] It should work as intended with these steps, anything beyond this is entirely optional.");
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine("\nPress any key to continue reading...");
-                                Console.ResetColor();
-                                Console.ReadKey();
-                                SoundPlayer.NextSound();
-                                TypeWithBlockTrail(guideText2, 10);
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine("Press any key to go back to main menu.");
-                                Console.ResetColor();
-                                Console.ReadKey();
-                                SoundPlayer.NextSound();
-                                Console.Clear();
-
-                            }
-                            SaveSettings();
-                            break;
-                        case ConsoleKey.D7:
-                            validInput = true;
-                            validKey = false;
-                            SoundPlayer.LaunchSelect();
-
-                            // Toggle the state of media keys
-                            if (!mediaKeysEnabled)
-                            {
-                                DisplayMenuGray(mainMenu);
-                                string message2 =
-                                    @$"
-========================================================================================
-**Media Keys: {mediaKeys}!** (experimental)
-
-Enabling this means that your keyboard will attempt to pause your media software using
-media keyboard keys (play and pause).
-========================================================================================";
-                                TypeWithBlockTrail(message2, 10);
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine("Media keys are now ENABLED!");
-                                mediaKeysEnabled = true;
-                                SaveSettings();
-                                SoundPlayer.SuccessSoundEffect();
-                                Console.ResetColor();
-                            }
-                            else
-                            {
-                                DisplayMenuGray(mainMenu);
-                                string message2 =
-                                    @$"
-========================================================================================
-**Media Keys: {mediaKeys}!** (experimental)
-
-Disabling this means that your keyboard will NOT attempt to pause your media software
-using media keyboard keys.
-========================================================================================";
-                                TypeWithBlockTrail(message2, 10);
-                                Console.ForegroundColor = ConsoleColor.Red;
-                                Console.WriteLine("Media keys are now DISABLED.");
-                                mediaKeysEnabled = false;
-                                SaveSettings();
-                                SoundPlayer.SuccessSoundEffect();
-                                Console.ResetColor();
-                            }
-                            Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine("Press any key to continue...");
-                            Console.ResetColor();
-                            Console.ReadKey();
-                            SoundPlayer.NextSound();
-
-                            break;
+                            return; //Choose app
                         case ConsoleKey.D5:
                             validInput = true;
                             SoundPlayer.LaunchSelect();
@@ -1030,14 +552,578 @@ It's really easy!
                                 ResetWebhookToDefault();
                                 SaveSettings();
                                 break;
-                            }
-                        case ConsoleKey.D0:
+                            } //auto config
+                        case ConsoleKey.D6:
+                            Console.CursorVisible = true;
+                            validInput = true;
+                            gray = true;
+                            SoundPlayer.LaunchSelect();
+                            DisplayMenuGray(mainMenu);
+                            Console.ForegroundColor = ConsoleColor.White;
+                            Console.Write("\nEnter desired port number (1024–65535): ");
+                            Console.ResetColor();
+                            if (int.TryParse(Console.ReadLine(), out int newPort) && newPort >= 1024 && newPort <= 65535)
                             {
-                                validInput = true;
-                                SoundPlayer.LaunchSelect();
+                                webhookPort = newPort;
+                                SavePort();
+
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine($"[✓] Success! New port set to http://localhost:{newPort}.");
+                                SoundPlayer.SuccessSoundEffect();
+                                Console.WriteLine("Press any key to save and continue.");
+                                Console.ReadKey();
+                                RestartWebhook(newPort);
                                 DisplayMenuGray(mainMenu);
-                                string restoreDefaults =
-                @$"
+                                SoundPlayer.NextSound();
+                                Console.ResetColor();
+
+                                bool wasGenerated;
+                                if (CfgFoundOrNot("gamestate_integration_media.cfg", out wasGenerated))
+                                {
+                                    DisplayMenuGray(mainMenu);
+                                    if (Process.GetProcessesByName("cs2").Any() || Process.GetProcessesByName("csgo").Any())
+                                    {
+                                        cfgRecentlyUpdated = true;
+                                    }
+                                    string truncatedPath = configFilePathPull.Length > 50 ? configFilePathPull.Substring(0, 50) + "..." : configFilePathPull;
+                                    string msg =
+                        @$"
+========================================================================================
+**Webhook Port Change**
+
+You {(wasGenerated ? "just created" : "seem to have")} a gamestate_integration_media.cfg located in:
+{truncatedPath}
+
+- Would you like to save the new port to it as well so that they match? (recommended)
+========================================================================================";
+                                    TypeWithBlockTrail(msg, 1);
+                                    Console.ForegroundColor = ConsoleColor.Green;
+                                    Console.WriteLine("[1] Yes [2] No");
+                                    Console.CursorVisible = false;
+                                    Console.ResetColor();
+
+
+                                    bool validInput2 = false;
+                                    while (!validInput2)
+                                    {
+                                        ConsoleKey key2 = Console.ReadKey(true).Key;
+                                        switch (key2)
+                                        {
+                                            case ConsoleKey.D1:
+                                            case ConsoleKey.NumPad1:
+                                                DisplayMenuGray(mainMenu);
+                                                SoundPlayer.NextSound();
+                                                validInput2 = true;
+                                                string newPortString = newPort.ToString();
+                                                bool success = UpdateGamestateIntegrationURI(newPortString);
+
+                                                if (success)
+                                                {
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine("gamestate_integration.cfg port updated successfully!");
+                                                    if (Process.GetProcessesByName("cs2").Any() || Process.GetProcessesByName("csgo").Any())
+                                                    {
+                                                        cfgRecentlyUpdated = true;
+                                                    }
+                                                    SoundPlayer.SuccessSoundEffect();
+                                                }
+                                                else
+                                                {
+                                                    Console.ForegroundColor = ConsoleColor.Red;
+                                                    Console.WriteLine("Failed to update the port.");
+                                                    DisplayMenuGray(mainMenu);
+                                                    ShowUriWarningBlock();
+                                                    SoundPlayer.ButtonFail();
+                                                }
+                                                Console.ResetColor();
+
+                                                break;
+
+                                            case ConsoleKey.D2:
+                                            case ConsoleKey.NumPad2:
+                                                SoundPlayer.NextSound();
+                                                DisplayMenuGray(mainMenu);
+                                                validInput2 = true;
+                                                ShowUriWarningBlock();
+                                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                                Console.WriteLine("Skipped updating URI.");
+                                                break;
+
+                                            default:
+                                                SoundPlayer.ButtonFail();
+                                                break;
+                                        }
+                                    }
+
+                                }
+                                else
+                                {
+                                    DisplayMenuGray(mainMenu);
+                                    ShowUriWarningBlock();
+                                }
+
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine("Press any key to continue...");
+                                Console.CursorVisible = false;
+                                Console.ResetColor();
+                                validKey = false;
+                                Console.ReadKey();
+                                SoundPlayer.NextSound();
+                            }
+                            else
+                            {
+                                SoundPlayer.ButtonFail();
+                                Console.WriteLine("Invalid port. Press any key to try again...");
+                                Console.WriteLine("Press any key to continue...");
+                                Console.CursorVisible = false;
+                                validKey = false;
+                                Console.ReadKey();
+                                SoundPlayer.NextSound();
+                            }
+                            Console.ResetColor();
+                            SaveSettings();
+                            gray = false;
+                            break; //change ports
+                        case ConsoleKey.D7:
+                            {
+                                bool subInputValid = false;
+                                while (!subInputValid)
+                                {
+                                    SoundPlayer.LaunchSelect();
+                                    Console.CursorVisible = false;
+                                    gray = true;
+                                    validKey = false;
+                                    DisplayMenuGray(mainMenu);
+                                    string soundSettingSelection =
+                        @$"
+========================================================================================
+**Sound Settings**
+
+[1] Volume Settings: min {defaultMinVolume} | max {defaultMaxVolume} | fade {defaultFade}
+[2] Media Keys: {mediaKeys}
+[3] Sound Alerts: {soundAlerts}
+
+[ESC] Exit
+========================================================================================";
+                                    TypeWithBlockTrail(soundSettingSelection, 1);
+                                    Console.ForegroundColor = ConsoleColor.Green;
+                                    Console.WriteLine("Please make your selection!");
+                                    Console.ResetColor();
+
+                                    var subKey1 = Console.ReadKey(true).Key;
+
+                                    if (subKey1 == ConsoleKey.NoName || subKey1 == ConsoleKey.VolumeUp || subKey1 == ConsoleKey.VolumeDown || subKey1 == ConsoleKey.VolumeMute)
+                                    {
+                                        // Skip over volume scroll or invalid inputs
+                                        continue;  // This is valid because we are inside a while loop
+                                    }
+
+                                    switch (subKey1)
+                                    {
+                                        case ConsoleKey.D1:
+                                            subInputValid = true;
+                                            SoundPlayer.LaunchSelect();
+                                            {
+                                                Console.CursorVisible = false;
+                                                gray = true;
+                                                validKey = false;
+                                                DisplayMenuGray(mainMenu);
+                                                string message2 =
+                    @$"
+========================================================================================
+**Volume Settings**
+
+Set your MINIMUM volume for freezetimes, timeouts and intermissions.
+Current minimum volume: {defaultMinVolume}%
+
+- I'd suggest setting it to 25% or 50% so you can hear calls at the start of rounds.
+========================================================================================";
+                                                TypeWithBlockTrail(message2, 10);
+                                                Console.ForegroundColor = ConsoleColor.Green;
+                                                Console.Write("Please set your NEW minimum volume (0-100): ");
+                                                Console.CursorVisible = true;
+                                                Console.ForegroundColor = ConsoleColor.White;
+                                                string input = Console.ReadLine();
+                                                Console.ResetColor();
+                                                if (string.IsNullOrEmpty(input))
+                                                {
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Red;
+                                                    Console.WriteLine("[✘] Input cannot be empty. - loading defaults");
+                                                    Console.ResetColor();
+                                                    defaultMinVolume = 25;
+                                                    defaultMaxVolume = 75;
+                                                    defaultFade = 1000;
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"Press any key to go back to main menu...");
+                                                    Console.CursorVisible = false;
+                                                    Console.ResetColor();
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                    return;
+                                                }
+                                                else
+                                                {
+                                                    // Check if input contains '%'
+                                                    if (input.Contains("%"))
+                                                    {
+                                                        // Remove the '%' character and try to parse the remaining number
+                                                        input = input.Replace("%", "").Trim();
+                                                    }
+                                                }
+
+                                                if (int.TryParse(input, out defaultMinVolume) && defaultMinVolume >= 0 && defaultMinVolume <= 100) //volume
+                                                {
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"[✓] New minimum volume: {defaultMinVolume}%.");
+                                                    Console.WriteLine("Press any key to save and continue.");
+                                                    Console.CursorVisible = false;
+                                                    SoundPlayer.SuccessSoundEffect();
+                                                    Console.ResetColor();
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                }
+                                                else
+                                                {
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Yellow;
+                                                    Console.WriteLine("[✘] Invalid input, choose a value between 0 and 100 - loading defaults.");
+                                                    defaultMinVolume = 25;
+                                                    defaultMaxVolume = 75;
+                                                    defaultFade = 1000;
+                                                    Console.ResetColor();
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"Press any key to go back to main menu...");
+                                                    Console.CursorVisible = false;
+                                                    Console.ResetColor();
+                                                    validKey = false;
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                    return;
+                                                }
+
+                                                gray = true;
+                                                validKey = false;
+                                                DisplayMenuGray(mainMenu);
+                                                string message5 =
+                    @$"
+========================================================================================
+**Volume Settings**
+
+Set your MAXIMUM volume for when you're DEAD in game.
+Current maximum volume: {defaultMaxVolume}%
+
+- I'd suggest setting it to 75% or 100%.
+========================================================================================";
+                                                TypeWithBlockTrail(message5, 10);
+                                                Console.ForegroundColor = ConsoleColor.Green;
+                                                Console.Write("Please set your NEW maximum volume (0-100): ");
+                                                Console.ForegroundColor = ConsoleColor.White;
+                                                Console.ResetColor();
+                                                string input2 = Console.ReadLine();
+                                                if (string.IsNullOrEmpty(input2))
+                                                {
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Red;
+                                                    Console.WriteLine("[✘] Input cannot be empty - loading defaults.");
+                                                    Console.ResetColor();
+                                                    defaultFade = 1000;
+                                                    defaultMaxVolume = 75;
+                                                    defaultMinVolume = 25;
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"Press any key to go back to main menu...");
+                                                    Console.ResetColor();
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                    return;
+                                                }
+                                                else
+                                                {
+                                                    // Check if input contains '%'
+                                                    if (input2.Contains("%"))
+                                                    {
+                                                        // Remove the '%' character and try to parse the remaining number
+                                                        input2 = input2.Replace("%", "").Trim();
+                                                    }
+                                                }
+
+                                                if (int.TryParse(input2, out defaultMaxVolume) && defaultMaxVolume >= 0 && defaultMaxVolume <= 100) //volume
+                                                {
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"[✓] New maximum volume: {defaultMaxVolume}%.");
+                                                    SoundPlayer.SuccessSoundEffect();
+                                                    Console.WriteLine("Press any key to save and continue.");
+                                                    Console.ResetColor();
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                }
+                                                else
+                                                {
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Yellow;
+                                                    Console.WriteLine("[✘] Invalid input, choose a value between 0 and 100 - loading defaults.");
+                                                    defaultMaxVolume = 75;
+                                                    defaultMinVolume = 25;
+                                                    defaultFade = 1000;
+                                                    Console.ResetColor();
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"Press any key to go back to main menu...");
+                                                    Console.ResetColor();
+                                                    validKey = false;
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                    return;
+                                                }
+
+                                                gray = true;
+                                                validKey = false;
+                                                DisplayMenuGray(mainMenu);
+                                                string message6 =
+                    @$"
+========================================================================================
+**Volume Settings**
+
+Set your fade level between mutes and unmutes for smooth sound transitions.
+Current fade: {defaultFade}ms
+
+- I'd suggest setting it between 500ms (0,5 seconds) and 1500ms (1,5 seconds)
+========================================================================================";
+                                                TypeWithBlockTrail(message6, 10);
+                                                Console.ForegroundColor = ConsoleColor.Green;
+                                                Console.Write("Please set your NEW fade volume (100-5000): ");
+                                                Console.ForegroundColor = ConsoleColor.White;
+                                                Console.ResetColor();
+                                                string input3 = Console.ReadLine();
+                                                if (string.IsNullOrEmpty(input3))
+                                                {
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Red;
+                                                    Console.WriteLine("[✘] Input cannot be empty - loading defaults.");
+                                                    Console.ResetColor();
+                                                    defaultMaxVolume = 75;
+                                                    defaultMinVolume = 25;
+                                                    defaultFade = 1000;
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"Press any key to go back to main menu...");
+                                                    Console.ResetColor();
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                    return;
+                                                }
+
+                                                if (int.TryParse(input3, out defaultFade) && defaultFade >= 100 && defaultFade <= 5000) //volume
+                                                {
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"[✓] New fade volume: {defaultFade}.");
+                                                    SoundPlayer.SuccessSoundEffect();
+                                                    Console.WriteLine("Press any key to save and continue go back to main menu.");
+                                                    Console.ResetColor();
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                }
+                                                else
+                                                {
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Yellow;
+                                                    Console.WriteLine("[✘] Invalid input, choose a value between 100 and 5000 - loading defaults.");
+                                                    defaultMaxVolume = 75;
+                                                    defaultMinVolume = 25;
+                                                    defaultFade = 1000;
+                                                    Console.ResetColor();
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine($"Press any key to go back to main menu...");
+                                                    Console.ResetColor();
+                                                    validKey = false;
+                                                    Console.ReadKey();
+                                                    SoundPlayer.NextSound();
+                                                    gray = false;
+                                                    return;
+                                                }
+                                                Console.ResetColor();
+                                                gray = false;
+                                            }
+                                            SaveSettings();
+                                            return; //min & max volume
+
+                                        case ConsoleKey.D2:
+                                            subInputValid = true;
+                                            validKey = false;
+                                            gray = true;
+                                            SoundPlayer.LaunchSelect();
+                                            DisplayMenuGray(mainMenu); // draw menu once
+                                            HandleMediaKeys();         // display extra info below menu
+                                            gray = false;
+                                            return; //Media Keys
+
+                                        case ConsoleKey.D3:
+                                            subInputValid = true;
+                                            bool subInputValid3 = false;
+                                            while (!subInputValid3)
+                                            {
+                                                SoundPlayer.LaunchSelect();
+                                                Console.CursorVisible = false;
+                                                gray = true;
+                                                validKey = false;
+                                                DisplayMenuGray(mainMenu);
+                                                string soundSettingChoices =
+                                    @$"
+========================================================================================
+**Sound Alert Settings**
+This will enable or disable sound alerts when you get kill streaks, double kill, multi 
+kill etc. Current setting: {soundAlerts}
+
+[1] Enable (all game modes)
+[2] Enable (only in deathmatch)
+[3] Disable (all game modes)
+
+[ESC] Exit
+========================================================================================";
+                                                TypeWithBlockTrail(soundSettingChoices, 1);
+                                                Console.ForegroundColor = ConsoleColor.Green;
+                                                Console.WriteLine("Please make your selection!");
+                                                Console.ResetColor();
+
+                                                var subKey5 = Console.ReadKey(true).Key;
+
+                                                if (subKey5 == ConsoleKey.NoName || subKey5 == ConsoleKey.VolumeUp || subKey5 == ConsoleKey.VolumeDown || subKey5 == ConsoleKey.VolumeMute)
+                                                {
+                                                    // Skip over volume scroll or invalid inputs
+                                                    continue;  // This is valid because we are inside a while loop
+                                                }
+
+                                                switch (subKey5)
+                                                {
+                                                    case ConsoleKey.D1:
+                                                        SoundPlayer.SuccessSoundEffect();
+                                                        Console.ForegroundColor = ConsoleColor.Green;
+                                                        soundAlerts = "enabled";
+                                                        Console.WriteLine("Sound notifications enabled!");
+                                                        Console.WriteLine("Press any key to return to main menu.");
+                                                        Console.ReadKey();
+                                                        Console.ResetColor();
+                                                        SaveSettings();
+                                                        return;
+                                                    case ConsoleKey.D2:
+                                                        SoundPlayer.SuccessSoundEffect();
+                                                        Console.ForegroundColor = ConsoleColor.Green;
+                                                        soundAlerts = "enabled(DM)";
+                                                        Console.WriteLine("Sound notifications enabled only for deathmatch!");
+                                                        Console.WriteLine("Press any key to return to main menu.");
+                                                        Console.ReadKey();
+                                                        Console.ResetColor();
+                                                        SaveSettings();
+                                                        return;
+                                                    case ConsoleKey.D3:
+                                                        SoundPlayer.SuccessSoundEffect();
+                                                        Console.ForegroundColor = ConsoleColor.Green;
+                                                        Console.WriteLine("Sound notifications disabled!");
+                                                        Console.WriteLine("Press any key to return to main menu.");
+                                                        soundAlerts = "disabled";
+                                                        Console.ReadKey();
+                                                        Console.ResetColor();
+                                                        SaveSettings();
+                                                        return;
+
+
+                                                    case ConsoleKey.Escape:
+                                                    mainScreen = false;
+                                                    subInputValid3 = true;
+                                                    SoundPlayer.EscapeButton();
+                                                    currentState = ProgramState.Menu;
+                                                    SaveSettings();
+                                                    return;  // exits entire method
+                                                default:
+                                                    SoundPlayer.ButtonFail();
+                                                    Console.ForegroundColor = ConsoleColor.Yellow;
+                                                    Console.WriteLine("[✘] Invalid input.");
+                                                    Console.ReadKey();
+                                                    break;
+                                                }
+                                            } // end while subInputValid
+                                            break;
+
+                                        case ConsoleKey.Escape:
+                                            mainScreen = false;
+                                            subInputValid = true;
+                                            SoundPlayer.EscapeButton();
+                                            currentState = ProgramState.Menu;
+                                            SaveSettings();
+                                            return;  // exits entire method
+                                        default:
+                                            SoundPlayer.ButtonFail();
+                                            Console.ForegroundColor = ConsoleColor.Yellow;
+                                            Console.WriteLine("[✘] Invalid input.");
+                                            Console.ReadKey();
+                                            break;
+                                    }
+                                } // end while subInputValid
+                                break;
+                            }
+                        case ConsoleKey.D8:
+                            {
+                                bool subInputValid2 = false;
+                                while (!subInputValid2)
+                                {
+                                    SoundPlayer.LaunchSelect();
+                                    Console.CursorVisible = false;
+                                    gray = true;
+                                    validKey = false;
+                                    DisplayMenuGray(mainMenu);
+
+                                    string helpMenu =
+                            @$"
+========================================================================================
+**Help & Restore Defaults**  
+
+[1] ReadMe & Instructions
+[2] Restore Defaults
+
+[ESC] Exit
+========================================================================================";
+                                    TypeWithBlockTrail(helpMenu, 1);
+                                    Console.ForegroundColor = ConsoleColor.Green;
+                                    Console.WriteLine("Please make your selection!");
+                                    Console.ResetColor();
+
+                                    var subKey2 = Console.ReadKey(true).Key;
+
+                                    // skip volume up/down/mute scroll events
+                                    if (subKey2 == ConsoleKey.NoName
+                                     || subKey2 == ConsoleKey.VolumeUp
+                                     || subKey2 == ConsoleKey.VolumeDown
+                                     || subKey2 == ConsoleKey.VolumeMute)
+                                    {
+                                        continue;
+                                    }
+
+                                    switch (subKey2)
+                                    {
+                                        case ConsoleKey.D1:
+                                        case ConsoleKey.NumPad1:
+                                            subInputValid2 = true;
+                                            validInput = true;
+                                            SoundPlayer.LaunchSelect();
+                                            HandleReadMe();
+                                            SaveSettings();
+                                            break;
+
+                                        case ConsoleKey.D2:
+                                        case ConsoleKey.NumPad2:
+                                            subInputValid2 = true;
+                                            validInput = true;
+                                            SoundPlayer.LaunchSelect();
+                                            DisplayMenuGray(mainMenu);
+
+                                            string restoreDefaults =
+                            @$"
 ========================================================================================
 **Restore Defaults**
 
@@ -1045,84 +1131,84 @@ This will restore your user settings back to default values.
 
 - Your program will require a restart after completion. Would you like to continue?
 ========================================================================================";
-                                TypeWithBlockTrail(restoreDefaults, 1);
+                                            TypeWithBlockTrail(restoreDefaults, 1);
 
-                                Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine("[1] Yes [2] No");
-                                Console.ResetColor();
+                                            Console.ForegroundColor = ConsoleColor.Green;
+                                            Console.WriteLine("[1] Yes   [2] No");
+                                            Console.ResetColor();
 
-                                ConsoleKey input = Console.ReadKey(true).Key;
-                                Console.WriteLine();
+                                            var choice = Console.ReadKey(true).Key;
+                                            Console.WriteLine();
 
-                                if (input == ConsoleKey.D1 || input == ConsoleKey.NumPad1)
-                                {
-                                    try
-                                    {
-                                        // our .exe directory
-                                        string exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                                            if (choice == ConsoleKey.D1 || choice == ConsoleKey.NumPad1)
+                                            {
+                                                try
+                                                {
+                                                    var exeDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                                                    var filesToClear = new[]
+                                                    {
+                            Path.Combine(exeDirectory, "settings.txt"),
+                            Path.Combine(exeDirectory, "webhook_log.txt"),
+                            Path.Combine(exeDirectory, "webhook_port.txt")
+                        };
 
-                                        // List of files to kill
-                                        string[] filesToClear = {
-                                    Path.Combine(exeDirectory, "settings.txt"),
-                                    Path.Combine(exeDirectory, "webhook_log.txt"),
-                                    Path.Combine(exeDirectory, "webhook_port.txt")
-                                    };
+                                                    foreach (var file in filesToClear)
+                                                        File.WriteAllText(file, string.Empty);
 
-                                        // Clear each file
-                                        foreach (string file in filesToClear)
-                                        {
-                                            File.WriteAllText(file, string.Empty); // Replace contents with empty string
-                                        }
+                                                    Console.ForegroundColor = ConsoleColor.Green;
+                                                    Console.WriteLine("Reverted back to defaults!");
+                                                    Console.WriteLine("Please restart the program!");
+                                                    resetRequested = true;
+                                                    Console.ResetColor();
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    Console.ForegroundColor = ConsoleColor.Red;
+                                                    Console.WriteLine("An error occurred while resetting files:");
+                                                    Console.WriteLine(ex.Message);
+                                                    resetRequested = true;
+                                                    Console.ResetColor();
+                                                }
 
-                                        Console.ForegroundColor = ConsoleColor.Green;
-                                        Console.WriteLine("Reverted back to defaults!");
-                                        Console.WriteLine("Please restart the program!");
-                                        resetRequested = true;
-                                        Console.ResetColor();
+                                                SoundPlayer.SuccessSoundEffect();
+                                                Environment.Exit(0);
+                                                Console.ReadLine(); // never reached but safe
+
+                                            }
+                                            else if (choice == ConsoleKey.D2 || choice == ConsoleKey.NumPad2)
+                                            {
+                                                SoundPlayer.LaunchSelect();
+                                                gray = true;
+                                                validKey = false;
+                                                // subInputValid2 already true, will exit to main menu
+                                            }
+                                            break;
+
+                                        case ConsoleKey.Escape:
+                                            mainScreen = false;
+                                            subInputValid2 = true;
+                                            SoundPlayer.EscapeButton();
+                                            currentState = ProgramState.Menu;
+                                            SaveSettings();
+                                            return;  // exits entire method, back to caller
+
+                                        default:
+                                            SoundPlayer.ButtonFail();
+                                            Console.ForegroundColor = ConsoleColor.Yellow;
+                                            Console.WriteLine("[✘] Invalid input.");
+                                            Console.ReadKey();
+                                            continue;
+
                                     }
-                                    catch (Exception ex)
-                                    {
-                                        Console.ForegroundColor = ConsoleColor.Red;
-                                        Console.WriteLine("An error occurred while resetting files:");
-                                        resetRequested = true;
-                                        Console.WriteLine(ex.Message);
-                                        Console.ResetColor();
-                                    }
-                                    SoundPlayer.SuccessSoundEffect();
-                                    Environment.Exit(0);
-                                    Console.ReadLine();
+                                } // end while (!subInputValid2)
 
-                                    gray = true;
-                                    validKey = false;
-                                }
-                                if (input == ConsoleKey.D2 || input == ConsoleKey.NumPad2)
-                                {
-                                    SoundPlayer.LaunchSelect();
-                                    gray = true;
-                                    validKey = false;
-                                    break;
-                                }
-                            }
-                            break;
+                                break;
+                            } // end case D8
 
+                        }
+                     }
 
-
-                        case ConsoleKey.Escape:
-
-                            mainScreen = false;
-                            validInput = true;
-                            SoundPlayer.EscapeButton();
-                            //StopWebhook(); 
-                            currentState = ProgramState.Menu;
-                            SaveSettings();
-                            return;
-                        default:
-                            SoundPlayer.ButtonFail();
-                            validKey = false;
-                            break;
-                    }
-                }
-                void ShowUriWarningBlock()
+                 void ShowUriWarningBlock()
                 {
                     DisplayMenuGray(mainMenu);
                     string portSaved =
@@ -1138,6 +1224,149 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 }
 
             }
+        }
+        static void HandleReadMe()
+        {
+            Console.Clear();
+            string guideText =
+@"  ========================================================================================
+                 Mullet Media-Strike 6.9 - Game State Integration
+  ========================================================================================
+
+  Follow these quick steps to get everything working smoothly. (Manual Setup)
+
+  ----------------------------------------------------------------------------------------
+  1. PLACE THE CONFIG FILE
+  ----------------------------------------------------------------------------------------
+     - Turn off Counter-Strike if its running.
+
+     - Copy the provided **game_stateintegration_media.cfg** file
+       (Its in the same folder as this readme)
+
+     - Paste it into the following folder:
+       [...]\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\csgo\cfg\
+
+  ----------------------------------------------------------------------------------------
+  2. YOU ARE DONE!
+  ----------------------------------------------------------------------------------------
+     - Start Counter-Strike again.
+
+     - Start or restart Mullet Media-Strike 6.9.
+  ----------------------------------------------------------------------------------------";
+
+
+            string guideText2 =
+@"  ----------------------------------------------------------------------------------------
+  3. (OPTIONAL) REPLACE ANY EXISTING CONFIG - FOOLPROOFING!
+  ----------------------------------------------------------------------------------------
+      - If a file named **gamestate_integration.cfg** already exists in that folder:
+       > Delete it.
+       > Replace it with **game_stateintegration_media.cfg**.
+
+  ----------------------------------------------------------------------------------------
+  4. (OPTIONAL) CONFIGURE LOCALHOST - skip if you want to use defaults.
+  ----------------------------------------------------------------------------------------
+     - Skip this if you just want to use the default port: **1337**
+
+     - If you want to use a different port:
+       > Open **game_stateintegration.cfg**
+       > Make sure the ""uri"" line uses the correct port your software listens to.
+         Example:
+         
+       ""uri"" ""http://localhost:1337/""
+
+       > Set whatever you port you chose in Mullet Media-Strike 6.9 to the same number.
+         You can change it in menu option [6] ""Change Webhook Port""
+
+  ----------------------------------------------------------------------------------------
+  IMPORTANT NOTES
+  ----------------------------------------------------------------------------------------
+   - You may need to run the software as administrator on some systems.
+
+   - This setup is **VAC-safe**. It uses the official GSI webhook that Valve
+     provides for tournament overlays.
+
+   - That said, I take **zero responsibility** if you get banned (even though that 
+     would make absolutely no sense).
+
+   - If something isn’t working, double-check:
+       > File paths
+       > Port numbers, they NEED to match for it to work.
+         Example: 
+         The gamestate_integration_media.cfg file has ""uri"" set to ""http://localhost:1337/""
+         this means that Mullet Media-Strike 6.9 needs to listen for port 1337 too.
+
+    - Every time you make changes to the .cfg file Counter-Strike requires a restart.
+
+    - I am currently considering looking into Spotify's API.
+
+    - If someone wants to help out with this project, let me know!
+
+  ========================================================================================
+                 Click some heads and enjoy your jams. //80smullet
+  ========================================================================================
+  ";
+            TypeWithBlockTrail(guideText, 10);
+            Console.ForegroundColor = ConsoleColor.Gray;
+            Console.WriteLine("\n[!] It should work as intended with these steps, anything beyond this is entirely optional.");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("\nPress any key to continue reading...");
+            Console.ResetColor();
+            Console.ReadKey();
+            SoundPlayer.NextSound();
+            TypeWithBlockTrail(guideText2, 10);
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("Press any key to go back to main menu.");
+            Console.ResetColor();
+            Console.ReadKey();
+            SoundPlayer.NextSound();
+            Console.Clear();
+        }
+
+        static void HandleMediaKeys()
+        {
+            string message2;
+
+            if (!mediaKeysEnabled)
+            {
+                message2 =
+        @$"
+========================================================================================
+**Media Keys: {mediaKeys}!** (experimental)
+
+Enabling this means that your keyboard will attempt to pause your media software using
+media keyboard keys (play and pause).
+========================================================================================";
+                TypeWithBlockTrail(message2, 10);
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Media keys are now ENABLED!");
+                mediaKeysEnabled = true;
+            }
+            else
+            {
+                message2 =
+        @$"
+========================================================================================
+**Media Keys: {mediaKeys}!** (experimental)
+
+Disabling this means that your keyboard will NOT attempt to pause your media software
+using media keyboard keys.
+========================================================================================";
+                TypeWithBlockTrail(message2, 10);
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Media keys are now DISABLED.");
+                mediaKeysEnabled = false;
+            }
+
+            SaveSettings();
+            SoundPlayer.SuccessSoundEffect();
+            Console.ResetColor();
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("Press any key to continue...");
+            Console.ResetColor();
+            Console.ReadKey();
+            SoundPlayer.NextSound();
         }
 
         static void TypeWithBlockTrail(string text, int delay = 10) //the cool modified text reveal method
@@ -1239,6 +1468,9 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
 
         static void SaveSettings()
         {
+            AudioControl.GetAppVolume($"{selectedProcessName}");
+
+
             try
             {
                 using (StreamWriter writer = new StreamWriter(settingsFilePath, false))  // Overwrites the save file each time
@@ -1248,6 +1480,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                     writer.WriteLine($"defaultFade={defaultFade}");
                     writer.WriteLine($"mediaKeysEnabled={mediaKeysEnabled}");
                     writer.WriteLine($"keystrokesCounter={keystrokesCounter}");
+                    writer.WriteLine($"soundAlerts={soundAlerts}");
                 }
                 //Console.WriteLine("[+] Settings saved successfully.");
             }
@@ -1283,6 +1516,9 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                                 break;
                             case "keystrokesCounter":
                                 keystrokesCounter = int.Parse(parts[1]);
+                                break;
+                            case "soundAlerts":
+                                soundAlerts = parts[1];
                                 break;
                         }
                     }
@@ -1414,10 +1650,10 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 }
             });
         }
+
         static void HandleIncomingGameState(string json)
         {
             shouldMute = false;
-
             try
             {
                 var jsonObj = JObject.Parse(json);
@@ -1432,6 +1668,8 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
 
                 string currentRound = jsonObj["map"]?["round"]?.ToString() ?? "";
 
+                int roundKills = jsonObj["player"]?["state"]?["round_kills"]?.Value<int>() ?? 0;
+
                 var matchStats = jsonObj["player"]?["match_stats"];
                 if (matchStats == null)
 
@@ -1441,6 +1679,86 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 providerSteamidStatus = providerSteamid;
                 playerSteamidStatus = playerSteamid;
                 gameModeStatus = gameMode;
+                string soundAlertsNext = "";
+                if (soundAlerts == "disabled")
+                {
+                    soundAlertsNext = "disabled";
+                }
+                else if (soundAlerts == "enabled")
+                {
+                    soundAlertsNext = "enabled";
+                }
+                else if (soundAlerts == "enabled(DM)" && gameMode == "deathmatch")
+                {
+                    soundAlertsNext = "enabled";
+                }
+                else if (soundAlerts == "enabled(DM)" && gameMode != "deathmatch")
+                {
+                    soundAlertsNext = "disabled";
+                }
+
+
+                bool isFreezeTime = (phase == "freezetime");
+                bool playerDied = (providerSteamid == playerSteamid) && (newDeaths > 0);
+
+                if (isFreezeTime || playerDied)
+                {
+                    roundKills = 0;
+                    killStreakText = "";
+                    playedDoubleKill = false;
+                    playedMultiKill = false;
+                    playedUltraKill = false;
+                    playedMonsterKill = false;
+                }
+
+                if (providerSteamid == playerSteamid && !isFreezeTime)
+                {
+                    if (roundKills == 0)
+                    {
+                        killStreakText = "";
+                    }
+                    if (roundKills >= 2 && !playedDoubleKill)
+                    {
+                        if (soundAlertsNext == "enabled")
+                        {
+                            Task.Run(() => SoundPlayer.DoubleKill());
+                        }
+                        killStreakText = "★★ Double Kill! ★★";
+                        playedDoubleKill = true;
+                    }
+                    if (roundKills >= 3 && !playedMultiKill)
+                    {
+                        if (soundAlertsNext == "enabled")
+                        {
+                            Task.Run(() => SoundPlayer.MultiKill());
+                        }
+                        killStreakText = "★★★ Multi Kill! ★★★";
+                        playedMultiKill = true;
+                    }
+                    if (roundKills >= 4 && !playedUltraKill)
+                    {
+                        if (soundAlertsNext == "enabled")
+                        {
+                            Task.Run(() => SoundPlayer.UltraKill());
+                        }
+                        killStreakText = "★★★★ ULTRA KILL!! ★★★★";
+                        playedUltraKill = true;
+                    }
+                    if (roundKills >= 5 && !playedMonsterKill)
+                    {
+                        if (soundAlertsNext == "enabled")
+                        {
+                        Task.Run(() => SoundPlayer.MonsterKill());
+                        }
+                        killStreakText = "★★★★★ M O N S T E R K I L L !!! ★★★★★";
+                        playedMonsterKill = true;
+
+                        playedDoubleKill = true;
+                        playedMultiKill = true;
+                        playedUltraKill = true;
+                    }
+                }
+
                 if (providerSteamid == playerSteamid && activity == "playing" && phase == "live")
                 {
                     int kills = matchStats?["kills"]?.Value<int>() ?? 0;
@@ -1449,7 +1767,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
 
                     int newKills = Math.Max(0, kills - lastKills);
                     int newAssists = Math.Max(0, assists - lastAssists);
-                    int newDeaths = Math.Max(0, deaths - lastDeaths);
+                    newDeaths = Math.Max(0, deaths - lastDeaths);
 
                     sessionKills += newKills;
                     sessionAssists += newAssists;
@@ -1470,7 +1788,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 {
                     freezetimeactive = false;
                 }
-
+                
                 if
                 (
                 providerSteamid == playerSteamid
@@ -1489,8 +1807,6 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 {
                     shouldMute = false;
                 }
-
-                //SoundPlayer.killStreakSound(json);
 
                 if (mainScreen && activity == "menu" || activity == "waiting...")
                 {
@@ -1550,7 +1866,6 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                     lastTargetVolume = targetVolume;
                 }
 
-
             }
 
 
@@ -1590,45 +1905,47 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
 
         static void TargetAppVolume(/*…*/)
         {
-            // decide “should be playing” based on targetVolume:
-            bool shouldBePlaying = targetVolume > 0;
-
-
-            // paused to playing
-            if (shouldBePlaying && !isPlaying && mediaKeysEnabled == true)
+            if (exiting == false)
             {
-                if (selectedProcessName == "spotify.exe" || 
-                    selectedProcessName == "VLC.exe" || 
+                // decide “should be playing” based on targetVolume:
+                bool shouldBePlaying = targetVolume > 0;
+
+                    // paused to playing
+                    if (shouldBePlaying && !isPlaying && mediaKeysEnabled == true)
+                {
+                    if (selectedProcessName == "spotify.exe" || 
+                    selectedProcessName == "vlc.exe" || 
                     selectedProcessName == "chrome.exe")
-                {
+                    {
                     MediaControl.SendPlayTargettedPauseKey(selectedProcessName);
-                }
-                else
-                {
+                    }
+                    else
+                    {
                     MediaControl.Play();
-                }
+                    }
                 isPlaying = true;
-            }
-
-            // volume fading
-            AudioControl.FadeToVolume(selectedProcessName, targetVolume, defaultFade, 10);
-            Thread.Sleep(defaultFade);
-
-            // transition
-            if (!shouldBePlaying && isPlaying && mediaKeysEnabled == true)
-            {
-                if (selectedProcessName == "spotify.exe" || 
-                    selectedProcessName == "VLC.exe" || 
-                    selectedProcessName == "chrome.exe")
-                    
-                {
-                    MediaControl.SendPlayTargettedPauseKey(selectedProcessName);
                 }
-                else
+
+                // volume fading
+                AudioControl.FadeToVolume(selectedProcessName, targetVolume, defaultFade, 10);
+                Thread.Sleep(defaultFade);
+
+                // transition
+                if (!shouldBePlaying && isPlaying && mediaKeysEnabled == true)
                 {
-                    MediaControl.Pause();
+                    if (selectedProcessName == "spotify.exe" ||
+                        selectedProcessName == "vlc.exe" ||
+                        selectedProcessName == "chrome.exe")
+
+                    {
+                        MediaControl.SendPlayTargettedPauseKey(selectedProcessName);
+                    }
+                    else
+                    {
+                        MediaControl.Pause();
+                    }
+                    isPlaying = false;
                 }
-                isPlaying = false;
             }
         }
 
@@ -1704,7 +2021,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
             DateTime lastWebhookCheck = DateTime.Now;
             int lastWidth = Console.WindowWidth;
             int lastHeight = Console.WindowHeight;
-
+            DateTime lastConnectionTime = DateTime.MinValue;
 
             while (!exitRequested)
             {
@@ -1769,29 +2086,32 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
 
                 Console.SetCursorPosition(0, 12);
                 currentVolume2 = AudioControl.GetAppVolume($"{selectedProcessName}");
-                Console.WriteLine($"{selectedProcessName} - {statusText} - current volume: {currentVolume2}".PadRight(w));
+                Console.WriteLine($"{selectedProcessName} - {statusText}".PadRight(w));
 
                 Console.SetCursorPosition(0, 13);
                 Console.WriteLine($"Volume: min {defaultMinVolume} | max {defaultMaxVolume} | fade: {defaultFade}".PadRight(w));
 
                 string howmanybars = plotVolume(currentVolume2);
-                Console.SetCursorPosition(0, 23);
-                Console.WriteLine($"[{howmanybars}]");
-
-
                 Console.SetCursorPosition(0, 14);
+                Console.WriteLine($"Current Volume: {currentVolume2} - [{howmanybars}]");
+
+
+                Console.SetCursorPosition(0, 15);
                 Console.WriteLine($"Media Keys: {mediaKeys}".PadRight(w));
 
-                Console.SetCursorPosition(0, 17);
+                Console.SetCursorPosition(0, 16);
+                Console.WriteLine($"Sound Alerts: {soundAlerts}".PadRight(w));
+
+                Console.SetCursorPosition(0, 19);
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.WriteLine("=================================================".PadRight(w));
 
-                Console.SetCursorPosition(0, 18);
+                Console.SetCursorPosition(0, 20);
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine($"[✓] Total keystrokes saved: {keystrokesCounter}".PadRight(w));
                 Console.ResetColor();
 
-                Console.SetCursorPosition(0, 20);
+                Console.SetCursorPosition(0, 22);
                 if (keystrokesCounter > 0)
                 {
                     Console.ForegroundColor = blinkColors[blinkColorIndex % blinkColors.Length];
@@ -1799,9 +2119,18 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                     blinkColorIndex++;
                 }
 
-                Console.SetCursorPosition(0, 21);
+                Console.SetCursorPosition(0, 23);
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.WriteLine("=================================================".PadRight(w));
+
+                Console.SetCursorPosition(0, 25);
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"{killStreakText}".PadRight(w));
+
+                //Console.SetCursorPosition(0, 27);
+                //Console.ForegroundColor = ConsoleColor.DarkGray;
+                //Console.WriteLine($"[ESC] - Exit | [1] - Show Additional Options".PadRight(w));
+
 
                 /*Console.SetCursorPosition(0, 24);
                 Console.ForegroundColor = ConsoleColor.Green;
@@ -1828,7 +2157,8 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                         isConnected = true;
                         shouldPlaySound = true;
                     }
-
+                    lastConnectionTime = DateTime.Now;
+                    
                     if (!shownConnected)
                     {
                         currentStatusMessage2 = "[CONNECTED] - Leave this window open and play!".PadRight(w);
@@ -1840,7 +2170,10 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 }
                 else
                 {
-                    isConnected = false;
+                    if ((DateTime.Now - lastConnectionTime).TotalSeconds > 10)
+                    {
+                        isConnected = false;
+                    }
                     shouldPlaySound = false;
 
                     // can only show one
@@ -1880,7 +2213,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
                 // always show a message on first run or when status changes
                 if (!string.IsNullOrEmpty(currentStatusMessage2) && (currentStatusMessage2 != lastStatusMessage || firstRun))
                 {
-                    Console.SetCursorPosition(0, 16);
+                    Console.SetCursorPosition(0, 18);
                     Console.ForegroundColor = isConnected ? ConsoleColor.DarkGreen : ConsoleColor.DarkYellow;
                     Console.WriteLine(currentStatusMessage2.PadRight(w)); 
                     Console.ResetColor();
@@ -1915,7 +2248,7 @@ Where? [...]SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\c
 
             for (int i = 0; i < INTVolume; i++)
             {
-                howmanybars += "=";
+                howmanybars += "●";
             }
 
             for (int i = 0; i < 10 - INTVolume; i++)
@@ -2303,7 +2636,7 @@ It looks like you don't have a gamestate_integration_media.cfg present in your C
  | \  / |_   _| | | ___| |_  | \  / | ___  __| |_  __ _ _____| (___ | |_ _ __ _| | _____   / /_| (_) |
  | |\/| | | | | | |/ _ \ __| | |\/| |/ _ \/ _` | |/ _` |______\___ \| __| '__| | |/ / _ \ | '_ \\__, |
  | |  | | |_| | | |  __/ |_  | |  | |  __/ (_| | | (_| |      ____) | |_| |  | |   <  __/ | (_) | / / 
- |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/");
+ |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/.03");
                 Console.ResetColor();
 
                 Console.ForegroundColor = ConsoleColor.DarkGray;
@@ -2471,7 +2804,7 @@ It looks like you don't have a gamestate_integration_media.cfg present in your C
  | \  / |_   _| | | ___| |_  | \  / | ___  __| |_  __ _ _____| (___ | |_ _ __ _| | _____   / /_| (_) |
  | |\/| | | | | | |/ _ \ __| | |\/| |/ _ \/ _` | |/ _` |______\___ \| __| '__| | |/ / _ \ | '_ \\__, |
  | |  | | |_| | | |  __/ |_  | |  | |  __/ (_| | | (_| |      ____) | |_| |  | |   <  __/ | (_) | / / 
- |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/");
+ |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/.03");
                             var player = new SoundPlayer();
                             string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "targetting_system.wav");
                             player.PlaySound(soundPath, 0.4f);
@@ -2618,7 +2951,7 @@ It's really easy!
  | \  / |_   _| | | ___| |_  | \  / | ___  __| |_  __ _ _____| (___ | |_ _ __ _| | _____   / /_| (_) |
  | |\/| | | | | | |/ _ \ __| | |\/| |/ _ \/ _` | |/ _` |______\___ \| __| '__| | |/ / _ \ | '_ \\__, |
  | |  | | |_| | | |  __/ |_  | |  | |  __/ (_| | | (_| |      ____) | |_| |  | |   <  __/ | (_) | / / 
- |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/");
+ |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/0.3");
                 Console.ResetColor();
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.WriteLine("                                            ⠀⠀⠀⠀⠀⠀");
@@ -2789,7 +3122,7 @@ It's really easy!
  | \  / |_   _| | | ___| |_  | \  / | ___  __| |_  __ _ _____| (___ | |_ _ __ _| | _____   / /_| (_) |
  | |\/| | | | | | |/ _ \ __| | |\/| |/ _ \/ _` | |/ _` |______\___ \| __| '__| | |/ / _ \ | '_ \\__, |
  | |  | | |_| | | |  __/ |_  | |  | |  __/ (_| | | (_| |      ____) | |_| |  | |   <  __/ | (_) | / / 
- |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/");
+ |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/0.3");
                             var player = new SoundPlayer();
                             string soundPath = Path.Combine(AppContext.BaseDirectory, "sounds", "targetting_system.wav");
                             player.PlaySound(soundPath, 0.4f);
@@ -2823,7 +3156,7 @@ has completed!
  | \  / |_   _| | | ___| |_  | \  / | ___  __| |_  __ _ _____| (___ | |_ _ __ _| | _____   / /_| (_) |
  | |\/| | | | | | |/ _ \ __| | |\/| |/ _ \/ _` | |/ _` |______\___ \| __| '__| | |/ / _ \ | '_ \\__, |
  | |  | | |_| | | |  __/ |_  | |  | |  __/ (_| | | (_| |      ____) | |_| |  | |   <  __/ | (_) | / / 
- |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/");
+ |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/0.3");
                             string autoConfigWarning2 =
 
         @"========================================================================================
@@ -2886,7 +3219,7 @@ It's really easy!
  | \  / |_   _| | | ___| |_  | \  / | ___  __| |_  __ _ _____| (___ | |_ _ __ _| | _____   / /_| (_) |
  | |\/| | | | | | |/ _ \ __| | |\/| |/ _ \/ _` | |/ _` |______\___ \| __| '__| | |/ / _ \ | '_ \\__, |
  | |  | | |_| | | |  __/ |_  | |  | |  __/ (_| | | (_| |      ____) | |_| |  | |   <  __/ | (_) | / / 
- |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/");
+ |_|  |_|\__,_|_|_|\___|\__| |_|  |_|\___|\__,_|_|\__,_|     |_____/ \__|_|  |_|_|\_\___|  \___(_)_/0.3");
                             string autoConfigMessage =
         @$"========================================================================================
 **Mullet Media-Strike 6.9 automatic port configuration**:

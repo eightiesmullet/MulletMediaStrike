@@ -50,7 +50,9 @@ namespace Mullet_Media_Strike_6._9
             VolumeUp = 655360,
             Stop = 851968,
             PreviousTrack = 786432,
-            NextTrack = 720896
+            NextTrack = 720896,
+            Play = 3014656,
+            Pause = 3080192
         }
         public static void SendPlayTargettedPauseKey(string selectedProcessName)
         {
@@ -65,7 +67,7 @@ namespace Mullet_Media_Strike_6._9
             }
             if (selectedProcessName == "vlc.exe")
             {
-                Process[] vlc = Process.GetProcessesByName("VLC");
+                Process[] vlc = Process.GetProcessesByName("vlc");
                 if (vlc.Length == 0) return;
                 if (vlc[0] != null)
                 {
@@ -83,6 +85,8 @@ namespace Mullet_Media_Strike_6._9
                     SendMessage(chrome[0].MainWindowHandle, WM_APPCOMMAND, 0, new IntPtr((long)SpotifyAction.PlayPause));
                 }
             }
+
+
             /*if (selectedProcessName == "winamp.exe")
             {
                 Process[] winamp = Process.GetProcessesByName("winamp");
