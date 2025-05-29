@@ -118,7 +118,7 @@ namespace Mullet_Media_Strike_6._9
         static string killStreakText = "";
         static bool runOnce = false;
         static int newDeaths = 0;
-        static string soundAlerts = "disabled(DM)";
+        static string soundAlerts = "enabled(DM)";
 
         enum ProgramState
         {
